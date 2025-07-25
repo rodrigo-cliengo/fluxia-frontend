@@ -6,26 +6,74 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: fluxia-app
-    ports:
-      - "3000:80"
     environment:
       - NODE_ENV=production
+      - REACT_APP_ENV=production
     restart: unless-stopped
     networks:
       - fluxia-network
+    labels:
+      # Traefik configuration
+      - "traefik.enable=true"
+      - "traefik.http.routers.fluxia.rule=Host(`fluxia-front.devcliengo.com`)"
+      - "traefik.http.routers.fluxia.entrypoints=web"
+      - "traefik.http.services.fluxia.loadbalancer.server.port=80"
+      
+      # HTTPS configuration
+      - "traefik.http.routers.fluxia-secure.rule=Host(`fluxia-front.devcliengo.com`)"
+      - "traefik.http.routers.fluxia-secure.entrypoints=websecure"
+      - "traefik.http.routers.fluxia-secure.tls.certresolver=letsencrypt"
+      
+      # HTTP to HTTPS redirect
+      - "traefik.http.routers.fluxia.middlewares=redirect-to-https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      
+      # Security headers
+      - "traefik.http.routers.fluxia-secure.middlewares=security-headers"
+      - "traefik.http.middlewares.security-headers.headers.frameDeny=true"
+      - "traefik.http.middlewares.security-headers.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.security-headers.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.security-headers.headers.stsSeconds=31536000"
+      - "traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.security-headers.headers.stsPreload=true"
 
-  # Optional: Add a reverse proxy for SSL termination and load balancing
-  nginx-proxy:
-    image: nginx:alpine
-    container_name: fluxia-proxy
+  traefik:
+    image: traefik:v3.0
+    container_name: fluxia-traefik
+    environment:
+      - TRAEFIK_LOG_LEVEL=WARN
+    command:
+      # Enable Docker provider
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      
+      # Configure entrypoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      
+      # Dashboard (secured for production)
+      - "--api.dashboard=false"
+      
+      # Configure Let's Encrypt
+      - "--certificatesresolvers.letsencrypt.acme.email=integrations@cliengo.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      
+      # Logging
+      - "--log.level=WARN"
+      - "--accesslog=true"
+      - "--accesslog.format=json"
+      
+      # Security
+      - "--global.checknewversion=false"
+      - "--global.sendanonymoususage=false"
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./nginx-proxy.conf:/etc/nginx/nginx.conf:ro
-      - ./ssl:/etc/nginx/ssl:ro  # Mount SSL certificates if needed
-    depends_on:
-      - fluxia-frontend
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik_acme:/acme.json
     restart: unless-stopped
     networks:
       - fluxia-network
@@ -35,5 +83,5 @@ networks:
     driver: bridge
 
 volumes:
-  nginx_logs:
+  traefik_acme:
     driver: local

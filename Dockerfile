@@ -19,6 +19,9 @@ RUN npm run build
 # Production stage
 FROM nginx:alpine
 
+# Install security updates
+RUN apk update && apk upgrade && rm -rf /var/cache/apk/*
+
 # Copy custom nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
 
