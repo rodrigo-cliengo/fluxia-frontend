@@ -1,6 +1,30 @@
 version: '3.8'
 
 services:
+  traefik:
+    image: "traefik"
+    restart: always
+    command:
+      - "--api=true"
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entrypoint.scheme=https"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.mytlschallenge.acme.tlschallenge=true"
+      - "--certificatesresolvers.mytlschallenge.acme.email=integrations@cliengo.com"
+      - "--certificatesresolvers.mytlschallenge.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /letsencrypt:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik_network
+
   fluxia-frontend:
     build:
       context: .
@@ -12,74 +36,25 @@ services:
     restart: unless-stopped
     networks:
       - fluxia-network
-    labels:
-      # Traefik configuration
       - "traefik.enable=true"
-      - "traefik.http.routers.fluxia.rule=Host(`fluxia-front.devcliengo.com`)"
-      - "traefik.http.routers.fluxia.entrypoints=web"
-      - "traefik.http.services.fluxia.loadbalancer.server.port=80"
-      
-      # HTTPS configuration
-      - "traefik.http.routers.fluxia-secure.rule=Host(`fluxia-front.devcliengo.com`)"
-      - "traefik.http.routers.fluxia-secure.entrypoints=websecure"
-      - "traefik.http.routers.fluxia-secure.tls.certresolver=letsencrypt"
-      
-      # HTTP to HTTPS redirect
-      - "traefik.http.routers.fluxia.middlewares=redirect-to-https"
-      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
-      
-      # Security headers
-      - "traefik.http.routers.fluxia-secure.middlewares=security-headers"
-      - "traefik.http.middlewares.security-headers.headers.frameDeny=true"
-      - "traefik.http.middlewares.security-headers.headers.browserXssFilter=true"
-      - "traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true"
-      - "traefik.http.middlewares.security-headers.headers.forceSTSHeader=true"
-      - "traefik.http.middlewares.security-headers.headers.stsSeconds=31536000"
-      - "traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true"
-      - "traefik.http.middlewares.security-headers.headers.stsPreload=true"
-
-  traefik:
-    image: traefik:v3.0
-    container_name: fluxia-traefik
-    environment:
-      - TRAEFIK_LOG_LEVEL=WARN
-    command:
-      # Enable Docker provider
-      - "--providers.docker=true"
-      - "--providers.docker.exposedbydefault=false"
-      
-      # Configure entrypoints
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      
-      # Dashboard (secured for production)
-      - "--api.dashboard=false"
-      
-      # Configure Let's Encrypt
-      - "--certificatesresolvers.letsencrypt.acme.email=integrations@cliengo.com"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/acme.json"
-      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
-      
-      # Logging
-      - "--log.level=WARN"
-      - "--accesslog=true"
-      - "--accesslog.format=json"
-      
-      # Security
-      - "--global.checknewversion=false"
-      - "--global.sendanonymoususage=false"
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - traefik_acme:/acme.json
-    restart: unless-stopped
+      - "traefik.http.routers.fastapi.rule=Host(`fluxia-front.devcliengo.com`)"
+      - "traefik.http.routers.fastapi.tls=true"
+      - "traefik.http.routers.fastapi.entrypoints=websecure,web"
+      - traefik.http.routers.fastapi.tls.certresolver=mytlschallenge
+      - traefik.http.middlewares.fastapi.headers.SSLRedirect=true
+      - traefik.http.middlewares.fastapi.headers.STSSeconds=315360000
+      - traefik.http.middlewares.fastapi.headers.browserXSSFilter=true
+      - traefik.http.middlewares.fastapi.headers.contentTypeNosniff=true
+      - traefik.http.middlewares.fastapi.headers.forceSTSHeader=true
+      - traefik.http.middlewares.fastapi.headers.SSLHost=fluxia-front.devcliengo.com
+      - traefik.http.middlewares.fastapi.headers.STSIncludeSubdomains=true
+      - traefik.http.middlewares.fastapi.headers.STSPreload=true
     networks:
-      - fluxia-network
+      - traefik_network
 
 networks:
-  fluxia-network:
+  traefik_network:
+    name: traefik_net
     driver: bridge
 
 volumes:
