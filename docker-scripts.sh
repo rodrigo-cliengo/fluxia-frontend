@@ -9,7 +9,12 @@ case "$1" in
         ;;
     "start")
         echo "🚀 Starting Fluxia application..."
-        docker-compose up -d
+        # Try with Traefik first, fallback to simple if issues
+        if ! docker-compose up -d 2>/dev/null; then
+            echo "⚠️  Issue with Traefik setup, trying simple configuration..."
+            docker-compose -f docker-compose-simple.yml up -d
+            echo "📱 App: http://$(hostname -I | awk '{print $1}')"
+        fi
         echo "✅ Application started!"
         echo "📱 App: http://fluxia-front.devcliengo.com"
         echo "🔒 HTTPS: https://fluxia-front.devcliengo.com"
@@ -17,10 +22,12 @@ case "$1" in
     "stop")
         echo "🛑 Stopping Fluxia application..."
         docker-compose down
+        docker-compose -f docker-compose-simple.yml down 2>/dev/null || true
         ;;
     "restart")
         echo "🔄 Restarting Fluxia application..."
         docker-compose down
+        docker-compose -f docker-compose-simple.yml down 2>/dev/null || true
         docker-compose up -d
         echo "✅ Application restarted!"
         echo "📱 App: http://fluxia-front.devcliengo.com"
@@ -46,11 +53,20 @@ case "$1" in
     "clean")
         echo "🧹 Cleaning up Docker resources..."
         docker-compose down -v
+        docker-compose -f docker-compose-simple.yml down -v 2>/dev/null || true
         docker system prune -f
+        docker volume prune -f
+        ;;
+    "simple")
+        echo "🚀 Starting with simple configuration (no Traefik)..."
+        docker-compose -f docker-compose-simple.yml up -d
+        echo "✅ Application started in simple mode!"
+        echo "📱 App: http://$(hostname -I | awk '{print $1}')"
         ;;
     "status")
         echo "📊 Application status:"
         docker-compose ps
+        docker-compose -f docker-compose-simple.yml ps
         ;;
     "ssl-check")
         echo "🔒 Checking SSL certificate..."

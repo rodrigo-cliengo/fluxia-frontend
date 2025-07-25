@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  fluxia-frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fluxia-app
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"

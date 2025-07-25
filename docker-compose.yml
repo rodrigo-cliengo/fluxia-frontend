@@ -41,8 +41,7 @@ services:
   traefik:
     image: traefik:v3.0
     container_name: fluxia-traefik
-    environment:
-      - TRAEFIK_LOG_LEVEL=WARN
+    restart: unless-stopped
     command:
       # Enable Docker provider
       - "--providers.docker=true"
@@ -52,7 +51,7 @@ services:
       - "--entrypoints.web.address=:80"
       - "--entrypoints.websecure.address=:443"
       
-      # Dashboard (secured for production)
+      # Dashboard (disabled for production)
       - "--api.dashboard=false"
       
       # Configure Let's Encrypt
@@ -73,10 +72,12 @@ services:
       - "443:443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
-      - ./acme.json:/acme.json
-    restart: unless-stopped
+      - traefik-acme:/acme.json
     networks:
       - fluxia-network
 
 networks:
   fluxia-network:
+
+volumes:
+  traefik-acme:
