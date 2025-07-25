@@ -8,7 +8,6 @@ case "$1" in
         docker-compose build --no-cache
         ;;
     "start")
-    
         echo "🚀 Starting Fluxia application..."
         docker-compose up -d
         echo "✅ Application started!"
