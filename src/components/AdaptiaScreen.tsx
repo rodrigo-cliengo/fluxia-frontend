@@ -1,8 +1,17 @@
 import React from 'react';
 import { ArrowLeft, Copy, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 
+interface Project {
+  projectName: string;
+  projectId: string;
+  projectDetails: {
+    companyInformation: string;
+  };
+}
+
 interface AdaptiaScreenProps {
   feature: string;
+  selectedProject: Project | undefined;
   onBack: () => void;
 }
 
@@ -27,7 +36,7 @@ const AdaptiaScreen: React.FC<AdaptiaScreenProps> = ({ feature, onBack }) => {
         setLoading(true);
         setError(null);
         
-        const response = await fetch('https://workflow-platform.cliengo.com/webhook/fluxia/adaptia', {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/adaptia`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -63,7 +72,7 @@ const AdaptiaScreen: React.FC<AdaptiaScreenProps> = ({ feature, onBack }) => {
     setLoading(true);
     const fetchAdaptiaData = async () => {
       try {
-        const response = await fetch('https://workflow-platform.cliengo.com/webhook-test/fluxia/adaptia', {
+        const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/adaptia`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',

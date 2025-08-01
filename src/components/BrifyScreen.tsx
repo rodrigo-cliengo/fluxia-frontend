@@ -1,38 +1,62 @@
 import React from 'react';
-import { ArrowLeft, Copy, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Copy, CheckCircle, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
+
+interface Project {
+  projectName: string;
+  projectId: string;
+  projectDetails: {
+    companyInformation: string;
+  };
+}
 
 interface BrifyScreenProps {
   feature: string;
+  selectedProject: Project | undefined;
   onBack: () => void;
 }
 
-interface BrifyResponse {
-  beneficioFuncional: string;
-  beneficioEconomico: string;
-  beneficioEmocional: string;
-  cta: string;
-  promptVeo3: string;
+interface BrifyOptionData {
+  option: string;
+  funcional: string;
+  económico: string;
+  emocional: string;
+  mensaje_comercial: string;
+  CTA: string;
   promptImage4: string;
+  promptVeo3: string;
 }
 
-const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, onBack }) => {
+interface BrifyApiResponse {
+  options: BrifyOptionData[];
+}
+
+const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onBack }) => {
   const [copiedItem, setCopiedItem] = React.useState<string | null>(null);
-  const [processedData, setProcessedData] = React.useState<BrifyResponse | null>(null);
+  const [allBrifyOptions, setAllBrifyOptions] = React.useState<BrifyOptionData[] | null>(null);
+  const [selectedOptionIndex, setSelectedOptionIndex] = React.useState<number>(0);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+
+  // Get current option data based on selected index
+  const currentOptionData = allBrifyOptions ? allBrifyOptions[selectedOptionIndex] : null;
 
   React.useEffect(() => {
     const fetchBrifyData = async () => {
       try {
         setLoading(true);
         setError(null);
+
+        const requestBody = {
+          feature,
+          project: selectedProject
+        };
         
-        const response = await fetch('https://workflow-platform.cliengo.com/webhook-test/fluxia/brify', {
+        const response = await fetch(`https://workflow-platform.cliengo.com/webhook/fluxia/brify`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ feature }),
+          body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
@@ -40,7 +64,7 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, onBack }) => {
         }
 
         const data: BrifyResponse = await response.json();
-        setProcessedData(data);
+        setAllBrifyOptions(data.options);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error desconocido al procesar la solicitud');
         console.error('Error fetching Brify data:', err);
@@ -50,7 +74,7 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, onBack }) => {
     };
 
     fetchBrifyData();
-  }, [feature]);
+  }, [feature, selectedProject]);
 
   const handleCopy = (text: string, itemName: string) => {
     navigator.clipboard.writeText(text);
@@ -64,12 +88,17 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, onBack }) => {
     // Trigger useEffect again by updating a dependency
     const fetchBrifyData = async () => {
       try {
-        const response = await fetch('https://workflow-platform.cliengo.com/webhook-test/fluxia/brify', {
+        const requestBody = {
+          feature,
+          project: selectedProject
+        };
+        
+        const response = await fetch(`https://workflow-platform.cliengo.com/webhook-test/fluxia/brify`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ feature }),
+          body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
@@ -77,7 +106,7 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, onBack }) => {
         }
 
         const data: BrifyResponse = await response.json();
-        setProcessedData(data);
+        setAllBrifyOptions(data.options);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error desconocido al procesar la solicitud');
         console.error('Error fetching Brify data:', err);
@@ -172,69 +201,107 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, onBack }) => {
           )}
 
           {/* Success State - Show Results */}
-          {processedData && !loading && !error && (
+          {allBrifyOptions && !loading && !error && (
             <>
-              {/* Benefits Section */}
-              <div className="space-y-6">
-                <h2 className="text-xl font-bold text-gray-900">Beneficios Identificados</h2>
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <OutputCard
-                    title="Beneficio Funcional"
-                    content={processedData.beneficioFuncional}
-                    itemKey="funcional"
-                  />
-                  <OutputCard
-                    title="Beneficio Económico"
-                    content={processedData.beneficioEconomico}
-                    itemKey="economico"
-                  />
-                  <OutputCard
-                    title="Beneficio Emocional"
-                    content={processedData.beneficioEmocional}
-                    itemKey="emocional"
-                  />
+              {/* Option Selection Dropdown */}
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                <div className="mb-4">
+                  <label htmlFor="option-select" className="block text-lg font-semibold text-gray-900 mb-2">
+                    Seleccionar Opción
+                  </label>
+                  <p className="text-gray-600 text-sm mb-4">
+                    Elige la opción que mejor se adapte a tus necesidades
+                  </p>
+                </div>
+                <div className="relative">
+                  <select
+                    id="option-select"
+                    value={selectedOptionIndex}
+                    onChange={(e) => setSelectedOptionIndex(parseInt(e.target.value))}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none bg-white text-gray-900"
+                  >
+                    {allBrifyOptions.map((option, index) => (
+                      <option key={index} value={index}>
+                        Opción {index + 1}: {option.option}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
                 </div>
               </div>
 
-              {/* CTA Section */}
-              <div className="space-y-6">
-                <h2 className="text-xl font-bold text-gray-900">Call to Action</h2>
-                <OutputCard
-                  title="CTA Optimizado"
-                  content={processedData.cta}
-                  itemKey="cta"
-                />
-              </div>
+              {currentOptionData && (
+                <>
+                  {/* Benefits Section */}
+                  <div className="space-y-6">
+                    <h2 className="text-xl font-bold text-gray-900">Beneficios Identificados</h2>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                      <OutputCard
+                        title="Beneficio Funcional"
+                        content={currentOptionData.funcional}
+                        itemKey="funcional"
+                      />
+                      <OutputCard
+                        title="Beneficio Económico"
+                        content={currentOptionData.económico}
+                        itemKey="economico"
+                      />
+                      <OutputCard
+                        title="Beneficio Emocional"
+                        content={currentOptionData.emocional}
+                        itemKey="emocional"
+                      />
+                    </div>
+                  </div>
 
-              {/* Visual Prompts Section */}
-              <div className="space-y-6">
-                <h2 className="text-xl font-bold text-gray-900">Prompts Visuales</h2>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <OutputCard
-                    title="Prompt de Veo3"
-                    content={processedData.promptVeo3}
-                    itemKey="veo3"
-                  />
-                  <OutputCard
-                    title="Prompt de Image4"
-                    content={processedData.promptImage4}
-                    itemKey="image4"
-                  />
-                </div>
-              </div>
+                  {/* CTA Section */}
+                  <div className="space-y-6">
+                    <h2 className="text-xl font-bold text-gray-900">Call to Action</h2>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <OutputCard
+                        title="Mensaje Comercial"
+                        content={currentOptionData.mensaje_comercial}
+                        itemKey="mensaje"
+                      />
+                      <OutputCard
+                        title="Call to Action"
+                        content={currentOptionData.CTA}
+                        itemKey="cta"
+                      />
+                    </div>
+                  </div>
 
-              {/* Action Buttons */}
-              <div className="flex justify-center space-x-4 pt-8">
-                <button 
-                  onClick={onBack}
-                  className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors duration-200"
-                >
-                  Generar Nuevo Brief
-                </button>
-                <button className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200">
-                  Exportar Resultados
-                </button>
-              </div>
+                  {/* Visual Prompts Section */}
+                  <div className="space-y-6">
+                    <h2 className="text-xl font-bold text-gray-900">Prompts Visuales</h2>
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <OutputCard
+                        title="Prompt de Veo3"
+                        content={currentOptionData.promptVeo3}
+                        itemKey="veo3"
+                      />
+                      <OutputCard
+                        title="Prompt de Image4"
+                        content={currentOptionData.promptImage4}
+                        itemKey="image4"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <div className="flex justify-center space-x-4 pt-8">
+                    <button 
+                      onClick={onBack}
+                      className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors duration-200"
+                    >
+                      Generar Nuevo Brief
+                    </button>
+                    <button className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200">
+                      Exportar Resultados
+                    </button>
+                  </div>
+                </>
+              )}
             </>
           )}
         </div>

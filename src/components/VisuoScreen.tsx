@@ -1,8 +1,17 @@
 import React from 'react';
 import { ArrowLeft, Copy, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
 
+interface Project {
+  projectName: string;
+  projectId: string;
+  projectDetails: {
+    companyInformation: string;
+  };
+}
+
 interface VisuoScreenProps {
   feature: string;
+  selectedProject: Project | undefined;
   onBack: () => void;
 }
 
@@ -15,7 +24,7 @@ interface VisuoResponse {
   promptTecnico: string;
 }
 
-const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, onBack }) => {
+const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, selectedProject, onBack }) => {
   const [copiedItem, setCopiedItem] = React.useState<string | null>(null);
   const [processedData, setProcessedData] = React.useState<VisuoResponse | null>(null);
   const [loading, setLoading] = React.useState(true);
@@ -27,12 +36,17 @@ const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, onBack }) => {
         setLoading(true);
         setError(null);
         
-        const response = await fetch('https://workflow-platform.cliengo.com/webhook/fluxia/visuo', {
+        const requestBody = {
+          feature,
+          project: selectedProject
+        };
+        
+        const response = await fetch(`https://workflow-platform.cliengo.com/webhook/fluxia/visuo`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ feature }),
+          body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
@@ -50,7 +64,7 @@ const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, onBack }) => {
     };
 
     fetchVisuoData();
-  }, [feature]);
+  }, [feature, selectedProject]);
 
   const handleCopy = (text: string, itemName: string) => {
     navigator.clipboard.writeText(text);
@@ -63,12 +77,17 @@ const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, onBack }) => {
     setLoading(true);
     const fetchVisuoData = async () => {
       try {
-        const response = await fetch('https://workflow-platform.cliengo.com/webhook-test/fluxia/visuo', {
+        const requestBody = {
+          feature,
+          project: selectedProject
+        };
+        
+        const response = await fetch(`https://workflow-platform.cliengo.com/webhook/fluxia/visuo`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({ feature }),
+          body: JSON.stringify(requestBody),
         });
 
         if (!response.ok) {
