@@ -13,24 +13,32 @@ interface VisuoScreenProps {
   feature: string;
   selectedProject: Project | undefined;
   onBack: () => void;
+  cachedData: { feature: string; data: any } | null;
+  onSaveCache: (data: any) => void;
+  onClearCache: () => void;
 }
 
 interface VisuoResponse {
-  promptGeneral: string;
-  promptMinimalista: string;
-  promptCorporativo: string;
-  promptCreativo: string;
-  promptEmocional: string;
-  promptTecnico: string;
+  image4: string;
+  VEO3: string;
 }
 
-const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, selectedProject, onBack }) => {
+const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, selectedProject, onBack, cachedData, onSaveCache, onClearCache }) => {
   const [copiedItem, setCopiedItem] = React.useState<string | null>(null);
-  const [processedData, setProcessedData] = React.useState<VisuoResponse | null>(null);
-  const [loading, setLoading] = React.useState(true);
+  const [processedData, setProcessedData] = React.useState<VisuoResponse | null>(
+    cachedData && cachedData.feature === feature ? cachedData.data : null
+  );
+  const [loading, setLoading] = React.useState(!cachedData || cachedData.feature !== feature);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    // If we have cached data for this feature, use it
+    if (cachedData && cachedData.feature === feature) {
+      setProcessedData(cachedData.data);
+      setLoading(false);
+      return;
+    }
+
     const fetchVisuoData = async () => {
       try {
         setLoading(true);
@@ -55,6 +63,7 @@ const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, selectedProject, onB
 
         const data: VisuoResponse = await response.json();
         setProcessedData(data);
+        onSaveCache(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error desconocido al procesar la solicitud');
         console.error('Error fetching Visuo data:', err);
@@ -96,6 +105,7 @@ const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, selectedProject, onB
 
         const data: VisuoResponse = await response.json();
         setProcessedData(data);
+        onSaveCache(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error desconocido al procesar la solicitud');
         console.error('Error fetching Visuo data:', err);
@@ -107,13 +117,15 @@ const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, selectedProject, onB
     fetchVisuoData();
   };
 
+  const handleRefresh = () => {
+    onClearCache();
+    setProcessedData(null);
+    handleRetry();
+  };
+
   const promptTypes = [
-    { key: 'promptGeneral', name: 'Prompt General', description: 'Versión base y versátil', color: 'gray' },
-    { key: 'promptMinimalista', name: 'Prompt Minimalista', description: 'Estilo limpio y simple', color: 'slate' },
-    { key: 'promptCorporativo', name: 'Prompt Corporativo', description: 'Profesional y empresarial', color: 'blue' },
-    { key: 'promptCreativo', name: 'Prompt Creativo', description: 'Artístico e innovador', color: 'purple' },
-    { key: 'promptEmocional', name: 'Prompt Emocional', description: 'Conecta con sentimientos', color: 'pink' },
-    { key: 'promptTecnico', name: 'Prompt Técnico', description: 'Detallado y específico', color: 'emerald' },
+    { key: 'image4', name: 'Image4', description: 'Prompt optimizado para Image4', color: 'blue' },
+    { key: 'VEO3', name: 'VEO3', description: 'Prompt optimizado para VEO3', color: 'purple' },
   ];
 
   const OutputCard: React.FC<{ title: string; description: string; content: string; itemKey: string; color: string }> = ({ title, description, content, itemKey, color }) => (
@@ -209,7 +221,7 @@ const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, selectedProject, onB
             <>
               {/* Visual Prompts */}
               <div className="space-y-6">
-                <h2 className="text-xl font-bold text-gray-900">Prompts Visuales por Estilo</h2>
+                <h2 className="text-xl font-bold text-gray-900">Prompts Visuales por Modelo</h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {promptTypes.map((promptType) => (
                     <OutputCard
@@ -227,10 +239,16 @@ const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, selectedProject, onB
               {/* Action Buttons */}
               <div className="flex justify-center space-x-4 pt-8">
                 <button 
+                  onClick={handleRefresh}
+                  className="px-6 py-3 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors duration-200"
+                >
+                  Generar Nuevo
+                </button>
+                <button 
                   onClick={onBack}
                   className="px-6 py-3 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors duration-200"
                 >
-                  Generar Nuevos Prompts
+                  Ir al Inicio
                 </button>
                 <button className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200">
                   Exportar Resultados

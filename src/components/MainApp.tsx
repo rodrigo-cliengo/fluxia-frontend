@@ -29,17 +29,52 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
   const [editedCompanyInfo, setEditedCompanyInfo] = React.useState('');
   const [isEditingCompanyInfo, setIsEditingCompanyInfo] = React.useState(false);
   const [isSavingCompanyInfo, setIsSavingCompanyInfo] = React.useState(false);
+  const [cachedResults, setCachedResults] = React.useState<{
+    brify: { feature: string; data: any } | null;
+    adaptia: { feature: string; data: any } | null;
+    visuo: { feature: string; data: any } | null;
+  }>({
+    brify: null,
+    adaptia: null,
+    visuo: null
+  });
 
-  const selectedProject = user.projects.find(p => p.projectId === selectedProjectId);
+  const selectedProject = user.projects.find(project => project.projectId === selectedProjectId);
+
+  React.useEffect(() => {
+    // Load cached results from localStorage
+    const savedCache = localStorage.getItem('fluxia_cached_results');
+    if (savedCache) {
+      try {
+        setCachedResults(JSON.parse(savedCache));
+      } catch (error) {
+        console.error('Error loading cached results:', error);
+      }
+    }
+  }, []);
 
   React.useEffect(() => {
     if (selectedProject) {
-      setEditedCompanyInfo(selectedProject.projectDetails.companyInformation);
+      setEditedCompanyInfo(selectedProject.projectDetails?.companyInformation || '');
     }
   }, [selectedProject]);
 
+  const saveCacheToStorage = (newCache: typeof cachedResults) => {
+    setCachedResults(newCache);
+    localStorage.setItem('fluxia_cached_results', JSON.stringify(newCache));
+  };
+
+  const clearModuleCache = (module: 'brify' | 'adaptia' | 'visuo') => {
+    const newCache = { ...cachedResults, [module]: null };
+    saveCacheToStorage(newCache);
+  };
   const handleBrifyStart = () => {
     if (featureText.trim()) {
+      // Check if we have cached results for this feature
+      if (cachedResults.brify && cachedResults.brify.feature === featureText.trim()) {
+        setCurrentScreen('brify');
+        return;
+      }
       setCurrentScreen('brify');
     } else {
       alert('Por favor, ingresa una descripción del feature antes de continuar.');
@@ -48,6 +83,11 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
 
   const handleAdaptiaStart = () => {
     if (featureText.trim()) {
+      // Check if we have cached results for this feature
+      if (cachedResults.adaptia && cachedResults.adaptia.feature === featureText.trim()) {
+        setCurrentScreen('adaptia');
+        return;
+      }
       setCurrentScreen('adaptia');
     } else {
       alert('Por favor, ingresa una descripción del feature antes de continuar.');
@@ -56,6 +96,11 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
 
   const handleVisuoStart = () => {
     if (featureText.trim()) {
+      // Check if we have cached results for this feature
+      if (cachedResults.visuo && cachedResults.visuo.feature === featureText.trim()) {
+        setCurrentScreen('visuo');
+        return;
+      }
       setCurrentScreen('visuo');
     } else {
       alert('Por favor, ingresa una descripción del feature antes de continuar.');
@@ -81,10 +126,7 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
         companyInformation: editedCompanyInfo,
       };
       
-      console.log('Sending update request:', requestData);
-      console.log('API URL:', `${import.meta.env.VITE_API_BASE_URL}/change-company-info`);
-      
-      const response = await fetch(`${import.meta.env.VITE_API_BASE_URL}/change-company-info`, {
+      const response = await fetch(`https://workflow-platform.cliengo.com/webhook/fluxia/change-compay-info`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -92,30 +134,20 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
         body: JSON.stringify(requestData),
       });
 
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-      console.log('Response ok:', response.ok);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.log('Error response text:', errorText);
+      if (response.status === 200) {
+        // Success: Update local state with the new company information
+        selectedProject.projectDetails.companyInformation = editedCompanyInfo;
+        setIsEditingCompanyInfo(false);
+        alert('Información de la empresa actualizada correctamente');
+      } else if (response.status === 503) {
+        // Failure: Don't update local state
+        throw new Error('El servicio no está disponible en este momento. Por favor, intenta más tarde.');
+      } else {
+        // Other errors
         throw new Error(`Error ${response.status}: ${response.statusText}`);
       }
 
-      const responseData = await response.json();
-      console.log('Success response:', responseData);
-      
-      // Update local state
-      selectedProject.projectDetails.companyInformation = editedCompanyInfo;
-      setIsEditingCompanyInfo(false);
-      alert('Información de la empresa actualizada correctamente');
     } catch (err) {
-      console.error('Update company info error:', err);
-      console.error('Error details:', {
-        message: err instanceof Error ? err.message : 'Unknown error',
-        type: typeof err,
-        stack: err instanceof Error ? err.stack : 'No stack trace'
-      });
       alert('Error al actualizar la información: ' + (err instanceof Error ? err.message : 'Error desconocido'));
     } finally {
       setIsSavingCompanyInfo(false);
@@ -123,15 +155,51 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
   };
 
   if (currentScreen === 'brify') {
-    return <BrifyScreen feature={featureText} onBack={handleBackToHome} selectedProject={selectedProject} />;
+    return (
+      <BrifyScreen 
+        feature={featureText} 
+        onBack={handleBackToHome} 
+        selectedProject={selectedProject}
+        cachedData={cachedResults.brify}
+        onSaveCache={(data) => {
+          const newCache = { ...cachedResults, brify: { feature: featureText, data } };
+          saveCacheToStorage(newCache);
+        }}
+        onClearCache={() => clearModuleCache('brify')}
+      />
+    );
   }
 
   if (currentScreen === 'adaptia') {
-    return <AdaptiaScreen feature={featureText} onBack={handleBackToHome} selectedProject={selectedProject} />;
+    return (
+      <AdaptiaScreen 
+        feature={featureText} 
+        onBack={handleBackToHome} 
+        selectedProject={selectedProject}
+        cachedData={cachedResults.adaptia}
+        onSaveCache={(data) => {
+          const newCache = { ...cachedResults, adaptia: { feature: featureText, data } };
+          saveCacheToStorage(newCache);
+        }}
+        onClearCache={() => clearModuleCache('adaptia')}
+      />
+    );
   }
 
   if (currentScreen === 'visuo') {
-    return <VisuoScreen feature={featureText} onBack={handleBackToHome} selectedProject={selectedProject} />;
+    return (
+      <VisuoScreen 
+        feature={featureText} 
+        onBack={handleBackToHome} 
+        selectedProject={selectedProject}
+        cachedData={cachedResults.visuo}
+        onSaveCache={(data) => {
+          const newCache = { ...cachedResults, visuo: { feature: featureText, data } };
+          saveCacheToStorage(newCache);
+        }}
+        onClearCache={() => clearModuleCache('visuo')}
+      />
+    );
   }
 
   if (currentScreen === 'projects') {

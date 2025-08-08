@@ -1,5 +1,6 @@
 import React from 'react';
 import { ArrowLeft, Copy, CheckCircle, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
+import { brifyService } from '../services/api';
 
 interface Project {
   projectName: string;
@@ -13,58 +14,37 @@ interface BrifyScreenProps {
   feature: string;
   selectedProject: Project | undefined;
   onBack: () => void;
+  cachedData: { feature: string; data: any } | null;
+  onSaveCache: (data: any) => void;
+  onClearCache: () => void;
 }
 
-interface BrifyOptionData {
-  option: string;
-  funcional: string;
-  económico: string;
-  emocional: string;
-  mensaje_comercial: string;
-  CTA: string;
-  promptImage4: string;
-  promptVeo3: string;
-}
+// Move interfaces to service file
+import type { BrifyOptionData, BrifyApiResponse } from '../services/api';
 
-interface BrifyApiResponse {
-  options: BrifyOptionData[];
-}
-
-const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onBack }) => {
+const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onBack, cachedData, onSaveCache, onClearCache }) => {
   const [copiedItem, setCopiedItem] = React.useState<string | null>(null);
   const [allBrifyOptions, setAllBrifyOptions] = React.useState<BrifyOptionData[] | null>(null);
   const [selectedOptionIndex, setSelectedOptionIndex] = React.useState<number>(0);
-  const [loading, setLoading] = React.useState(true);
+  const [loading, setLoading] = React.useState(!cachedData || cachedData.feature !== feature);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Get current option data based on selected index
-  const currentOptionData = allBrifyOptions ? allBrifyOptions[selectedOptionIndex] : null;
-
   React.useEffect(() => {
+    // If we have cached data for this feature, use it
+    if (cachedData && cachedData.feature === feature) {
+      setAllBrifyOptions(cachedData.data.options);
+      setLoading(false);
+      return;
+    }
+
     const fetchBrifyData = async () => {
       try {
         setLoading(true);
         setError(null);
-
-        const requestBody = {
-          feature,
-          project: selectedProject
-        };
         
-        const response = await fetch(`https://workflow-platform.cliengo.com/webhook/fluxia/brify`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Error ${response.status}: ${response.statusText}`);
-        }
-
-        const data: BrifyResponse = await response.json();
+        const data = await brifyService.generateBrief(feature, selectedProject);
         setAllBrifyOptions(data.options);
+        onSaveCache(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error desconocido al procesar la solicitud');
         console.error('Error fetching Brify data:', err);
@@ -76,46 +56,35 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onB
     fetchBrifyData();
   }, [feature, selectedProject]);
 
+  const handleRetry = async (forceRefresh = false) => {
+    try {
+      setError(null);
+      setLoading(true);
+      
+      const data = await brifyService.generateBrief(feature, selectedProject);
+      setAllBrifyOptions(data.options);
+      onSaveCache(data);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido al procesar la solicitud');
+      console.error('Error fetching Brify data:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    onClearCache();
+    setAllBrifyOptions(null);
+    handleRetry(true);
+  };
+
+  // Get current option data based on selected index
+  const currentOptionData = allBrifyOptions ? allBrifyOptions[selectedOptionIndex] : null;
+
   const handleCopy = (text: string, itemName: string) => {
     navigator.clipboard.writeText(text);
     setCopiedItem(itemName);
     setTimeout(() => setCopiedItem(null), 2000);
-  };
-
-  const handleRetry = () => {
-    setError(null);
-    setLoading(true);
-    // Trigger useEffect again by updating a dependency
-    const fetchBrifyData = async () => {
-      try {
-        const requestBody = {
-          feature,
-          project: selectedProject
-        };
-        
-        const response = await fetch(`https://workflow-platform.cliengo.com/webhook-test/fluxia/brify`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Error ${response.status}: ${response.statusText}`);
-        }
-
-        const data: BrifyResponse = await response.json();
-        setAllBrifyOptions(data.options);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error desconocido al procesar la solicitud');
-        console.error('Error fetching Brify data:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchBrifyData();
   };
 
   const OutputCard: React.FC<{ title: string; content: string; itemKey: string }> = ({ title, content, itemKey }) => (
@@ -222,7 +191,7 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onB
                   >
                     {allBrifyOptions.map((option, index) => (
                       <option key={index} value={index}>
-                        Opción {index + 1}: {option.option}
+                        Opción {index + 1}
                       </option>
                     ))}
                   </select>
@@ -273,17 +242,12 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onB
 
                   {/* Visual Prompts Section */}
                   <div className="space-y-6">
-                    <h2 className="text-xl font-bold text-gray-900">Prompts Visuales</h2>
-                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <h2 className="text-xl font-bold text-gray-900">Prompt Visual</h2>
+                    <div className="grid grid-cols-1 gap-6">
                       <OutputCard
-                        title="Prompt de Veo3"
-                        content={currentOptionData.promptVeo3}
-                        itemKey="veo3"
-                      />
-                      <OutputCard
-                        title="Prompt de Image4"
-                        content={currentOptionData.promptImage4}
-                        itemKey="image4"
+                        title="Prompt Visual"
+                        content={currentOptionData.visual}
+                        itemKey="visual"
                       />
                     </div>
                   </div>
@@ -291,10 +255,16 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onB
                   {/* Action Buttons */}
                   <div className="flex justify-center space-x-4 pt-8">
                     <button 
+                      onClick={handleRefresh}
+                      className="px-6 py-3 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors duration-200"
+                    >
+                      Generar Nuevo
+                    </button>
+                    <button 
                       onClick={onBack}
                       className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors duration-200"
                     >
-                      Generar Nuevo Brief
+                      Ir al Inicio
                     </button>
                     <button className="px-6 py-3 bg-gray-200 text-gray-700 rounded-lg font-medium hover:bg-gray-300 transition-colors duration-200">
                       Exportar Resultados
