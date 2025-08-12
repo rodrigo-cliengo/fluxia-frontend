@@ -1,63 +1,21 @@
 import React from 'react';
 import { ArrowLeft, Copy, CheckCircle, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
-
-interface Project {
-  projectName: string;
-  projectId: string;
-  projectDetails: {
-    companyInformation: string;
-  };
-}
+import { AppController } from '../controllers/AppController';
+import { AdaptiaData } from '../models/AdaptiaData';
 
 interface AdaptiaScreenProps {
+  appController: AppController;
   feature: string;
-  selectedProject: Project | undefined;
   onBack: () => void;
-  cachedData: { feature: string; data: any } | null;
-  onSaveCache: (data: any) => void;
-  onClearCache: () => void;
 }
 
-interface MediaContentItem {
-  option: string;
-  objective: string;
-  format: string;
-  caption: string;
-  visualSuggestion: string;
-  hashtags: string;
-}
-
-interface LandingContentItem {
-  option: string;
-  titulo: string;
-  Support_text: string;
-}
-
-interface AdaptiaResponse {
-  content: {
-    facebook?: MediaContentItem[];
-    instagram?: MediaContentItem[];
-    x?: MediaContentItem[];
-    youtube?: MediaContentItem[];
-    linkedin?: MediaContentItem[];
-    tiktok?: MediaContentItem[];
-    landingPage?: LandingContentItem[];
-    blog?: MediaContentItem[];
-    threads?: MediaContentItem[];
-  };
-}
-
-const AdaptiaScreen: React.FC<AdaptiaScreenProps> = ({ feature, selectedProject, onBack, cachedData, onSaveCache, onClearCache }) => {
+export const AdaptiaScreen: React.FC<AdaptiaScreenProps> = ({ appController, feature, onBack }) => {
   const [copiedItem, setCopiedItem] = React.useState<string | null>(null);
-  const [processedData, setProcessedData] = React.useState<AdaptiaResponse | null>(
-    cachedData && cachedData.feature === feature ? cachedData.data : null
-  );
+  const [adaptiaData, setAdaptiaData] = React.useState<AdaptiaData | null>(null);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [selectedMedia, setSelectedMedia] = React.useState<string[]>([]);
-  const [videoScript, setVideoScript] = React.useState(
-    cachedData && cachedData.feature === feature ? cachedData.data.videoScript || '' : ''
-  );
+  const [videoScript, setVideoScript] = React.useState('');
   const [currentOptionIndex, setCurrentOptionIndex] = React.useState<Record<string, number>>({});
 
   const mediaOptions = [
@@ -72,64 +30,48 @@ const AdaptiaScreen: React.FC<AdaptiaScreenProps> = ({ feature, selectedProject,
     { key: 'threads', name: 'Threads', apiKey: 'threads' },
   ];
 
+  React.useEffect(() => {
+    // Check for cached data
+    const cachedData = appController.getAdaptiaCachedData(videoScript);
+    if (cachedData) {
+      setAdaptiaData(cachedData);
+      setSelectedMedia(cachedData.selectedMedia);
+    }
+  }, [videoScript, appController]);
+
   const handleCopy = (text: string, itemName: string) => {
     navigator.clipboard.writeText(text);
     setCopiedItem(itemName);
     setTimeout(() => setCopiedItem(null), 2000);
   };
 
-  const fetchAdaptiaData = async () => {
-    if (selectedMedia.length === 0) {
-      setError('Por favor selecciona al menos un medio para adaptar');
-      return;
-    }
-    
-    if (!videoScript.trim()) {
-      setError('Por favor ingresa un guión de video');
-      return;
-    }
-
+  const handleGenerate = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      const response = await fetch(`https://workflow-platform.cliengo.com/webhook/fluxia/adaptia`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-          videoScript,
-          project: selectedProject,
-          selectedMedia
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      const result = await appController.generateAdaptations(videoScript, selectedMedia);
+      if (result.success && result.data) {
+        setAdaptiaData(result.data);
+        setCurrentOptionIndex({});
+      } else {
+        setError(result.error || 'Error desconocido');
       }
-
-      const data: AdaptiaResponse = await response.json();
-      console.log('Adaptia API Response:', data);
-      console.log('Content structure:', data.content);
-      console.log('Available keys in content:', data.content ? Object.keys(data.content) : 'content is undefined');
-      setProcessedData(data);
-      onSaveCache({ ...data, videoScript, selectedMedia });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido al procesar la solicitud');
-      console.error('Error fetching Adaptia data:', err);
+      console.error('Error generating Adaptia data:', err);
     } finally {
       setLoading(false);
     }
   };
 
   const handleRetry = () => {
-    fetchAdaptiaData();
+    handleGenerate();
   };
 
   const handleRefresh = () => {
-    onClearCache();
-    setProcessedData(null);
+    appController.clearAdaptiaCache();
+    setAdaptiaData(null);
     setCurrentOptionIndex({});
   };
 
@@ -149,12 +91,6 @@ const AdaptiaScreen: React.FC<AdaptiaScreenProps> = ({ feature, selectedProject,
     }
   };
 
-  const handleGenerate = () => {
-    fetchAdaptiaData();
-    // Reset option indices when generating new content
-    setCurrentOptionIndex({});
-  };
-
   const getColorForMedia = (key: string) => {
     const colorMap: Record<string, string> = {
       facebook: 'blue',
@@ -170,24 +106,6 @@ const AdaptiaScreen: React.FC<AdaptiaScreenProps> = ({ feature, selectedProject,
     return colorMap[key] || 'gray';
   };
 
-  const getSelectedMediaResults = () => {
-    if (!processedData) return [];
-    
-    return selectedMedia.map(mediaKey => {
-      const mediaOption = mediaOptions.find(option => option.key === mediaKey);
-      const apiKey = mediaOption?.apiKey || mediaKey;
-      const contentArray = processedData.content?.[apiKey as keyof typeof processedData.content];
-      
-      return {
-        key: mediaKey,
-        name: mediaOption?.name || mediaKey,
-        content: contentArray || [],
-        color: getColorForMedia(mediaKey),
-        isLanding: mediaKey === 'landingPage'
-      };
-    }).filter(item => item.content.length > 0);
-  };
-
   const navigateOption = (mediaKey: string, direction: 'prev' | 'next', totalOptions: number) => {
     setCurrentOptionIndex(prev => {
       const currentIndex = prev[mediaKey] || 0;
@@ -199,23 +117,19 @@ const AdaptiaScreen: React.FC<AdaptiaScreenProps> = ({ feature, selectedProject,
         newIndex = currentIndex < totalOptions - 1 ? currentIndex + 1 : 0;
       }
       
-      const newState = { ...prev, [mediaKey]: newIndex };
-      console.log(`Navigation for ${mediaKey}: ${currentIndex} -> ${newIndex}`, newState);
-      return newState;
+      return { ...prev, [mediaKey]: newIndex };
     });
   };
 
   const MediaCard: React.FC<{ 
     title: string; 
-    items: MediaContentItem[] | LandingContentItem[]; 
+    items: any[]; 
     itemKey: string; 
     color: string;
     isLanding?: boolean;
   }> = ({ title, items, itemKey, color, isLanding = false }) => {
     const currentIndex = currentOptionIndex[itemKey] || 0;
     const currentItem = items[currentIndex];
-    
-    console.log(`MediaCard ${title}: currentIndex=${currentIndex}, totalItems=${items.length}`, { currentOptionIndex, itemKey });
     
     if (!currentItem) return null;
 
@@ -249,26 +163,18 @@ const AdaptiaScreen: React.FC<AdaptiaScreenProps> = ({ feature, selectedProject,
         <div className="flex items-center justify-between mb-4">
           <button
             type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              navigateOption(itemKey, 'prev', items.length);
-            }}
+            onClick={() => navigateOption(itemKey, 'prev', items.length)}
             className={`flex items-center justify-center w-8 h-8 text-${color}-400 hover:text-${color}-600 hover:bg-${color}-50 rounded-full transition-colors duration-200`}
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
           
-          {/* Dots Indicator */}
           <div className="flex items-center space-x-2">
             {items.map((_, index) => (
               <button
                 type="button"
                 key={index}
-                onClick={() => {
-                  console.log(`Dot clicked for ${itemKey}: ${index}`);
-                  setCurrentOptionIndex(prev => ({ ...prev, [itemKey]: index }));
-                }}
+                onClick={() => setCurrentOptionIndex(prev => ({ ...prev, [itemKey]: index }))}
                 className={`w-2 h-2 rounded-full transition-colors duration-200 ${
                   index === currentIndex ? `bg-${color}-500` : 'bg-gray-300 hover:bg-gray-400'
                 }`}
@@ -278,18 +184,13 @@ const AdaptiaScreen: React.FC<AdaptiaScreenProps> = ({ feature, selectedProject,
           
           <button
             type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              navigateOption(itemKey, 'next', items.length);
-            }}
+            onClick={() => navigateOption(itemKey, 'next', items.length)}
             className={`flex items-center justify-center w-8 h-8 text-${color}-400 hover:text-${color}-600 hover:bg-${color}-50 rounded-full transition-colors duration-200`}
           >
             <ChevronRight className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content */}
         <div className="border border-gray-100 rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h4 className="font-medium text-gray-900">Opción {currentIndex + 1}</h4>
@@ -299,34 +200,34 @@ const AdaptiaScreen: React.FC<AdaptiaScreenProps> = ({ feature, selectedProject,
             <div className="space-y-3">
               <div>
                 <span className="font-medium text-gray-700">Título: </span>
-                <span className="text-gray-600">{(currentItem as LandingContentItem).titulo}</span>
+                <span className="text-gray-600">{currentItem.titulo}</span>
               </div>
               <div>
                 <span className="font-medium text-gray-700">Texto de soporte: </span>
-                <p className="text-gray-600 mt-1">{(currentItem as LandingContentItem).Support_text}</p>
+                <p className="text-gray-600 mt-1">{currentItem.Support_text}</p>
               </div>
             </div>
           ) : (
             <div className="space-y-3">
               <div>
                 <span className="font-medium text-gray-700">Objetivo: </span>
-                <span className="text-gray-600">{(currentItem as MediaContentItem).objective}</span>
+                <span className="text-gray-600">{currentItem.objective}</span>
               </div>
               <div>
                 <span className="font-medium text-gray-700">Formato: </span>
-                <span className="text-gray-600">{(currentItem as MediaContentItem).format}</span>
+                <span className="text-gray-600">{currentItem.format}</span>
               </div>
               <div>
                 <span className="font-medium text-gray-700">Caption: </span>
-                <p className="text-gray-600 mt-1">{(currentItem as MediaContentItem).caption}</p>
+                <p className="text-gray-600 mt-1">{currentItem.caption}</p>
               </div>
               <div>
                 <span className="font-medium text-gray-700">Sugerencia Visual: </span>
-                <p className="text-gray-600 mt-1">{(currentItem as MediaContentItem).visualSuggestion}</p>
+                <p className="text-gray-600 mt-1">{currentItem.visualSuggestion}</p>
               </div>
               <div>
                 <span className="font-medium text-gray-700">Hashtags: </span>
-                <span className="text-gray-600">{(currentItem as MediaContentItem).hashtags}</span>
+                <span className="text-gray-600">{currentItem.hashtags}</span>
               </div>
             </div>
           )}
@@ -461,13 +362,12 @@ const AdaptiaScreen: React.FC<AdaptiaScreenProps> = ({ feature, selectedProject,
           )}
 
           {/* Success State - Show Results */}
-          {processedData && !loading && !error && (
+          {adaptiaData && !loading && !error && (
             <>
-              {/* Social Media Adaptations */}
               <div className="space-y-6">
                 <h2 className="text-xl font-bold text-gray-900">Contenido Adaptado</h2>
                 <div className="grid grid-cols-1 gap-6">
-                  {getSelectedMediaResults().map((media) => (
+                  {adaptiaData.getSelectedMediaResults().map((media) => (
                     <MediaCard
                       key={media.key}
                       title={media.name}
@@ -480,19 +380,12 @@ const AdaptiaScreen: React.FC<AdaptiaScreenProps> = ({ feature, selectedProject,
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex justify-center space-x-4 pt-8">
                 <button 
                   onClick={handleRefresh}
                   className="px-6 py-3 bg-gray-600 text-white rounded-lg font-medium hover:bg-gray-700 transition-colors duration-200"
                 >
                   Generar Nuevo
-                </button>
-                <button 
-                  onClick={onBack}
-                  className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors duration-200"
-                >
-                  Ir al Inicio
                 </button>
                 <button 
                   onClick={onBack}
@@ -511,5 +404,3 @@ const AdaptiaScreen: React.FC<AdaptiaScreenProps> = ({ feature, selectedProject,
     </div>
   );
 };
-
-export default AdaptiaScreen;

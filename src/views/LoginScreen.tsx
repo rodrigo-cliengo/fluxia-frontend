@@ -1,36 +1,15 @@
 import React from 'react';
 import { ArrowLeft, Mail, Lock, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
-
-interface Project {
-  projectName: string;
-  projectId: string;
-  projectDetails: {
-    companyInformation: string;
-  };
-}
-
-interface User {
-  name: string;
-  projects: Project[];
-}
-
-interface LoginSuccessResponse {
-  verification: 'success';
-  user: User;
-}
-
-interface LoginErrorResponse {
-  verification: 'wrongEmail' | 'wrongPassword';
-}
-
-type LoginResponse = LoginSuccessResponse | LoginErrorResponse;
+import { AppController } from '../controllers/AppController';
+import { User } from '../models/User';
 
 interface LoginScreenProps {
+  appController: AppController;
   onBack: () => void;
   onLoginSuccess: (user: User) => void;
 }
 
-const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLoginSuccess }) => {
+export const LoginScreen: React.FC<LoginScreenProps> = ({ appController, onBack, onLoginSuccess }) => {
   const [email, setEmail] = React.useState('');
   const [password, setPassword] = React.useState('');
   const [showPassword, setShowPassword] = React.useState(false);
@@ -49,38 +28,15 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLoginSuccess }) => 
       setLoading(true);
       setError(null);
 
-      const response = await fetch('https://workflow-platform.cliengo.com/webhook/fluxia/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
-      });
+      const result = await appController.login(email, password);
 
-      console.log('Login request sent:', { email, password });
-      console.log('Response status:', response.status);
-      console.log('Response headers:', response.headers);
-      if (!response.ok) {
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
-      }
-
-      const responseData: LoginResponse = await response.json();
-
-      switch (responseData.verification) {
-        case 'success':
-          onLoginSuccess(responseData.user);
-          break;
-        case 'wrongEmail':
-          setError('El email ingresado no está registrado');
-          break;
-        case 'wrongPassword':
-          setError('La contraseña es incorrecta');
-          break;
-        default:
-          setError('Error desconocido en el servidor');
+      if (result.success && result.user) {
+        onLoginSuccess(result.user);
+      } else {
+        setError(result.error || 'Error desconocido');
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error de conexión');
+      setError('Error inesperado');
       console.error('Login error:', err);
     } finally {
       setLoading(false);
@@ -209,5 +165,3 @@ const LoginScreen: React.FC<LoginScreenProps> = ({ onBack, onLoginSuccess }) => 
     </div>
   );
 };
-
-export default LoginScreen;

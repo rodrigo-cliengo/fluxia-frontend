@@ -1,50 +1,42 @@
 import React from 'react';
 import { ArrowLeft, Copy, CheckCircle, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
-import { brifyService } from '../services/api';
-
-interface Project {
-  projectName: string;
-  projectId: string;
-  projectDetails: {
-    companyInformation: string;
-  };
-}
+import { AppController } from '../controllers/AppController';
+import { BrifyData } from '../models/BrifyData';
 
 interface BrifyScreenProps {
+  appController: AppController;
   feature: string;
-  selectedProject: Project | undefined;
   onBack: () => void;
-  cachedData: { feature: string; data: any } | null;
-  onSaveCache: (data: any) => void;
-  onClearCache: () => void;
 }
 
-// Move interfaces to service file
-import type { BrifyOptionData, BrifyApiResponse } from '../services/api';
-
-const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onBack, cachedData, onSaveCache, onClearCache }) => {
+export const BrifyScreen: React.FC<BrifyScreenProps> = ({ appController, feature, onBack }) => {
   const [copiedItem, setCopiedItem] = React.useState<string | null>(null);
-  const [allBrifyOptions, setAllBrifyOptions] = React.useState<BrifyOptionData[] | null>(null);
+  const [brifyData, setBrifyData] = React.useState<BrifyData | null>(null);
   const [selectedOptionIndex, setSelectedOptionIndex] = React.useState<number>(0);
-  const [loading, setLoading] = React.useState(!cachedData || cachedData.feature !== feature);
+  const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    // If we have cached data for this feature, use it
-    if (cachedData && cachedData.feature === feature) {
-      setAllBrifyOptions(cachedData.data.options);
+    // Check for cached data first
+    const cachedData = appController.getBrifyCachedData(feature);
+    if (cachedData) {
+      setBrifyData(cachedData);
       setLoading(false);
       return;
     }
 
+    // If no cached data, fetch from API
     const fetchBrifyData = async () => {
       try {
         setLoading(true);
         setError(null);
         
-        const data = await brifyService.generateBrief(feature, selectedProject);
-        setAllBrifyOptions(data.options);
-        onSaveCache(data);
+        const result = await appController.generateBrief(feature);
+        if (result.success && result.data) {
+          setBrifyData(result.data);
+        } else {
+          setError(result.error || 'Error desconocido');
+        }
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error desconocido al procesar la solicitud');
         console.error('Error fetching Brify data:', err);
@@ -54,16 +46,19 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onB
     };
 
     fetchBrifyData();
-  }, [feature, selectedProject]);
+  }, [feature, appController]);
 
-  const handleRetry = async (forceRefresh = false) => {
+  const handleRetry = async () => {
     try {
       setError(null);
       setLoading(true);
       
-      const data = await brifyService.generateBrief(feature, selectedProject);
-      setAllBrifyOptions(data.options);
-      onSaveCache(data);
+      const result = await appController.generateBrief(feature);
+      if (result.success && result.data) {
+        setBrifyData(result.data);
+      } else {
+        setError(result.error || 'Error desconocido');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Error desconocido al procesar la solicitud');
       console.error('Error fetching Brify data:', err);
@@ -73,13 +68,10 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onB
   };
 
   const handleRefresh = () => {
-    onClearCache();
-    setAllBrifyOptions(null);
-    handleRetry(true);
+    appController.clearBrifyCache();
+    setBrifyData(null);
+    handleRetry();
   };
-
-  // Get current option data based on selected index
-  const currentOptionData = allBrifyOptions ? allBrifyOptions[selectedOptionIndex] : null;
 
   const handleCopy = (text: string, itemName: string) => {
     navigator.clipboard.writeText(text);
@@ -170,7 +162,7 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onB
           )}
 
           {/* Success State - Show Results */}
-          {allBrifyOptions && !loading && !error && (
+          {brifyData && !loading && !error && (
             <>
               {/* Option Selection Dropdown */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -189,7 +181,7 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onB
                     onChange={(e) => setSelectedOptionIndex(parseInt(e.target.value))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none bg-white text-gray-900"
                   >
-                    {allBrifyOptions.map((option, index) => (
+                    {brifyData.options.map((option, index) => (
                       <option key={index} value={index}>
                         Opción {index + 1}
                       </option>
@@ -199,7 +191,7 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onB
                 </div>
               </div>
 
-              {currentOptionData && (
+              {brifyData.getOption(selectedOptionIndex) && (
                 <>
                   {/* Benefits Section */}
                   <div className="space-y-6">
@@ -207,17 +199,17 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onB
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                       <OutputCard
                         title="Beneficio Funcional"
-                        content={currentOptionData.funcional}
+                        content={brifyData.getOption(selectedOptionIndex)!.funcional}
                         itemKey="funcional"
                       />
                       <OutputCard
                         title="Beneficio Económico"
-                        content={currentOptionData.económico}
+                        content={brifyData.getOption(selectedOptionIndex)!.económico}
                         itemKey="economico"
                       />
                       <OutputCard
                         title="Beneficio Emocional"
-                        content={currentOptionData.emocional}
+                        content={brifyData.getOption(selectedOptionIndex)!.emocional}
                         itemKey="emocional"
                       />
                     </div>
@@ -229,12 +221,12 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onB
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <OutputCard
                         title="Mensaje Comercial"
-                        content={currentOptionData.mensaje_comercial}
+                        content={brifyData.getOption(selectedOptionIndex)!.mensaje_comercial}
                         itemKey="mensaje"
                       />
                       <OutputCard
                         title="Call to Action"
-                        content={currentOptionData.CTA}
+                        content={brifyData.getOption(selectedOptionIndex)!.CTA}
                         itemKey="cta"
                       />
                     </div>
@@ -246,7 +238,7 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onB
                     <div className="grid grid-cols-1 gap-6">
                       <OutputCard
                         title="Prompt Visual"
-                        content={currentOptionData.visual}
+                        content={brifyData.getOption(selectedOptionIndex)!.visual}
                         itemKey="visual"
                       />
                     </div>
@@ -279,5 +271,3 @@ const BrifyScreen: React.FC<BrifyScreenProps> = ({ feature, selectedProject, onB
     </div>
   );
 };
-
-export default BrifyScreen;

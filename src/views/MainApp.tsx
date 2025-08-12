@@ -1,57 +1,29 @@
 import React from 'react';
-import { FileText, RefreshCw, Eye, Menu, User, Settings, BarChart3, LogOut, ChevronDown, Save, Loader2 } from 'lucide-react';
-import BrifyScreen from './BrifyScreen';
-import AdaptiaScreen from './AdaptiaScreen';
-import VisuoScreen from './VisuoScreen';
-
-interface Project {
-  projectName: string;
-  projectId: string;
-  projectDetails: {
-    companyInformation: string;
-  };
-}
-
-interface UserData {
-  name: string;
-  projects: Project[];
-}
+import { FileText, RefreshCw, Eye, Menu, Settings, BarChart3, LogOut, ChevronDown, Save, Loader2 } from 'lucide-react';
+import { BrifyScreen } from './BrifyScreen';
+import { AdaptiaScreen } from './AdaptiaScreen';
+import { VisuoScreen } from './VisuoScreen';
+import { AppController, AppScreen } from '../controllers/AppController';
+import { User } from '../models/User';
 
 interface MainAppProps {
-  user: UserData;
+  appController: AppController;
   onLogout: () => void;
+  onScreenChange: (screen: AppScreen) => void;
 }
 
-const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
-  const [currentScreen, setCurrentScreen] = React.useState<'home' | 'brify' | 'adaptia' | 'visuo' | 'projects'>('home');
+export const MainApp: React.FC<MainAppProps> = ({ appController, onLogout, onScreenChange }) => {
+  const [currentScreen, setCurrentScreen] = React.useState<AppScreen>('app');
   const [featureText, setFeatureText] = React.useState('');
-  const [selectedProjectId, setSelectedProjectId] = React.useState(user.projects[0]?.projectId || '');
+  const [selectedProjectId, setSelectedProjectId] = React.useState(() => 
+    appController.getSelectedProjectId()
+  );
   const [editedCompanyInfo, setEditedCompanyInfo] = React.useState('');
   const [isEditingCompanyInfo, setIsEditingCompanyInfo] = React.useState(false);
   const [isSavingCompanyInfo, setIsSavingCompanyInfo] = React.useState(false);
-  const [cachedResults, setCachedResults] = React.useState<{
-    brify: { feature: string; data: any } | null;
-    adaptia: { feature: string; data: any } | null;
-    visuo: { feature: string; data: any } | null;
-  }>({
-    brify: null,
-    adaptia: null,
-    visuo: null
-  });
 
-  const selectedProject = user.projects.find(project => project.projectId === selectedProjectId);
-
-  React.useEffect(() => {
-    // Load cached results from localStorage
-    const savedCache = localStorage.getItem('fluxia_cached_results');
-    if (savedCache) {
-      try {
-        setCachedResults(JSON.parse(savedCache));
-      } catch (error) {
-        console.error('Error loading cached results:', error);
-      }
-    }
-  }, []);
+  const user = appController.getUser()!;
+  const selectedProject = user.getProject(selectedProjectId);
 
   React.useEffect(() => {
     if (selectedProject) {
@@ -59,60 +31,48 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
     }
   }, [selectedProject]);
 
-  const saveCacheToStorage = (newCache: typeof cachedResults) => {
-    setCachedResults(newCache);
-    localStorage.setItem('fluxia_cached_results', JSON.stringify(newCache));
-  };
+  React.useEffect(() => {
+    appController.selectProject(selectedProjectId);
+  }, [selectedProjectId, appController]);
 
-  const clearModuleCache = (module: 'brify' | 'adaptia' | 'visuo') => {
-    const newCache = { ...cachedResults, [module]: null };
-    saveCacheToStorage(newCache);
-  };
-  const handleBrifyStart = () => {
+  const handleModuleStart = (module: 'brify' | 'adaptia' | 'visuo') => {
     if (featureText.trim()) {
       // Check if we have cached results for this feature
-      if (cachedResults.brify && cachedResults.brify.feature === featureText.trim()) {
-        setCurrentScreen('brify');
+      const cachedData = getCachedDataForModule(module);
+      if (cachedData) {
+        setCurrentScreen(module);
+        onScreenChange(module);
         return;
       }
-      setCurrentScreen('brify');
+      setCurrentScreen(module);
+      onScreenChange(module);
     } else {
       alert('Por favor, ingresa una descripción del feature antes de continuar.');
     }
   };
 
-  const handleAdaptiaStart = () => {
-    if (featureText.trim()) {
-      // Check if we have cached results for this feature
-      if (cachedResults.adaptia && cachedResults.adaptia.feature === featureText.trim()) {
-        setCurrentScreen('adaptia');
-        return;
-      }
-      setCurrentScreen('adaptia');
-    } else {
-      alert('Por favor, ingresa una descripción del feature antes de continuar.');
-    }
-  };
-
-  const handleVisuoStart = () => {
-    if (featureText.trim()) {
-      // Check if we have cached results for this feature
-      if (cachedResults.visuo && cachedResults.visuo.feature === featureText.trim()) {
-        setCurrentScreen('visuo');
-        return;
-      }
-      setCurrentScreen('visuo');
-    } else {
-      alert('Por favor, ingresa una descripción del feature antes de continuar.');
+  const getCachedDataForModule = (module: 'brify' | 'adaptia' | 'visuo') => {
+    switch (module) {
+      case 'brify':
+        return appController.getBrifyCachedData(featureText.trim());
+      case 'adaptia':
+        // For Adaptia, we'll check cache in the screen itself since it depends on video script
+        return null;
+      case 'visuo':
+        return appController.getVisuoCachedData(featureText.trim());
+      default:
+        return null;
     }
   };
 
   const handleBackToHome = () => {
-    setCurrentScreen('home');
+    setCurrentScreen('app');
+    onScreenChange('app');
   };
 
   const handleProjectsClick = () => {
     setCurrentScreen('projects');
+    onScreenChange('projects');
   };
 
   const handleSaveCompanyInfo = async () => {
@@ -121,30 +81,13 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
     try {
       setIsSavingCompanyInfo(true);
       
-      const requestData = {
-        projectId: selectedProjectId,
-        companyInformation: editedCompanyInfo,
-      };
-      
-      const response = await fetch(`https://workflow-platform.cliengo.com/webhook/fluxia/change-compay-info`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(requestData),
-      });
+      const result = await appController.updateCompanyInfo(selectedProjectId, editedCompanyInfo);
 
-      if (response.status === 200) {
-        // Success: Update local state with the new company information
-        selectedProject.projectDetails.companyInformation = editedCompanyInfo;
+      if (result.success) {
         setIsEditingCompanyInfo(false);
         alert('Información de la empresa actualizada correctamente');
-      } else if (response.status === 503) {
-        // Failure: Don't update local state
-        throw new Error('El servicio no está disponible en este momento. Por favor, intenta más tarde.');
       } else {
-        // Other errors
-        throw new Error(`Error ${response.status}: ${response.statusText}`);
+        alert('Error al actualizar la información: ' + result.error);
       }
 
     } catch (err) {
@@ -157,15 +100,9 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
   if (currentScreen === 'brify') {
     return (
       <BrifyScreen 
+        appController={appController}
         feature={featureText} 
         onBack={handleBackToHome} 
-        selectedProject={selectedProject}
-        cachedData={cachedResults.brify}
-        onSaveCache={(data) => {
-          const newCache = { ...cachedResults, brify: { feature: featureText, data } };
-          saveCacheToStorage(newCache);
-        }}
-        onClearCache={() => clearModuleCache('brify')}
       />
     );
   }
@@ -173,15 +110,9 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
   if (currentScreen === 'adaptia') {
     return (
       <AdaptiaScreen 
+        appController={appController}
         feature={featureText} 
         onBack={handleBackToHome} 
-        selectedProject={selectedProject}
-        cachedData={cachedResults.adaptia}
-        onSaveCache={(data) => {
-          const newCache = { ...cachedResults, adaptia: { feature: featureText, data } };
-          saveCacheToStorage(newCache);
-        }}
-        onClearCache={() => clearModuleCache('adaptia')}
       />
     );
   }
@@ -189,15 +120,9 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
   if (currentScreen === 'visuo') {
     return (
       <VisuoScreen 
+        appController={appController}
         feature={featureText} 
         onBack={handleBackToHome} 
-        selectedProject={selectedProject}
-        cachedData={cachedResults.visuo}
-        onSaveCache={(data) => {
-          const newCache = { ...cachedResults, visuo: { feature: featureText, data } };
-          saveCacheToStorage(newCache);
-        }}
-        onClearCache={() => clearModuleCache('visuo')}
       />
     );
   }
@@ -406,7 +331,6 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
             <span>Configuración</span>
           </a>
         </nav>
-
       </div>
 
       {/* Main Content */}
@@ -501,7 +425,7 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
                   </div>
                 </div>
                 <button 
-                  onClick={handleBrifyStart}
+                  onClick={() => handleModuleStart('brify')}
                   className="w-full bg-purple-600 text-white py-2.5 px-4 rounded-lg font-medium hover:bg-purple-700 transition-colors duration-200"
                 >
                   Iniciar Brify
@@ -532,7 +456,7 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
                   </div>
                 </div>
                 <button 
-                  onClick={handleAdaptiaStart}
+                  onClick={() => handleModuleStart('adaptia')}
                   className="w-full bg-blue-600 text-white py-2.5 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors duration-200"
                 >
                   Iniciar Adaptia
@@ -563,7 +487,7 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
                   </div>
                 </div>
                 <button 
-                  onClick={handleVisuoStart}
+                  onClick={() => handleModuleStart('visuo')}
                   className="w-full bg-emerald-600 text-white py-2.5 px-4 rounded-lg font-medium hover:bg-emerald-700 transition-colors duration-200"
                 >
                   Iniciar Visuo
@@ -598,5 +522,3 @@ const MainApp: React.FC<MainAppProps> = ({ user, onLogout }) => {
     </div>
   );
 };
-
-export default MainApp;

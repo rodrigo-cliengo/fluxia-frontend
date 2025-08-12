@@ -5,7 +5,7 @@ interface HomePageProps {
   onLoginClick: () => void;
 }
 
-const HomePage: React.FC<HomePageProps> = ({ onLoginClick }) => {
+export const HomePage: React.FC<HomePageProps> = ({ onLoginClick }) => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-purple-50 via-white to-blue-50 flex items-center justify-center">
       <div className="max-w-md w-full mx-4">
@@ -46,5 +46,3 @@ const HomePage: React.FC<HomePageProps> = ({ onLoginClick }) => {
     </div>
   );
 };
-
-export default HomePage;

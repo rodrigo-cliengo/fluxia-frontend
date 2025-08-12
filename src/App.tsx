@@ -1,38 +1,16 @@
 import React from 'react';
-import HomePage from './components/HomePage';
-import LoginScreen from './components/LoginScreen';
-import MainApp from './components/MainApp';
-
-interface Project {
-  projectName: string;
-  projectId: string;
-  projectDetails: {
-    companyInformation: string;
-  };
-}
-
-interface User {
-  name: string;
-  projects: Project[];
-}
+import { HomePage } from './views/HomePage';
+import { LoginScreen } from './views/LoginScreen';
+import { MainApp } from './views/MainApp';
+import { AppController, AppScreen } from './controllers/AppController';
+import { User } from './models/User';
 
 function App() {
-  const [currentScreen, setCurrentScreen] = React.useState<'home' | 'login' | 'app'>('home');
-  const [isAuthenticated, setIsAuthenticated] = React.useState(() => {
-    const savedAuth = localStorage.getItem('fluxia_authenticated');
-    return savedAuth === 'true';
-  });
-  const [user, setUser] = React.useState<User | null>(() => {
-    const savedUser = localStorage.getItem('fluxia_user');
-    return savedUser ? JSON.parse(savedUser) : null;
-  });
-
-  // Set initial screen based on authentication state
-  React.useEffect(() => {
-    if (isAuthenticated && user) {
-      setCurrentScreen('app');
-    }
-  }, [isAuthenticated, user]);
+  const [appController] = React.useState(() => AppController.getInstance());
+  const [currentScreen, setCurrentScreen] = React.useState<AppScreen>(() => 
+    appController.getInitialScreen()
+  );
+  const [user, setUser] = React.useState<User | null>(() => appController.getUser());
 
   const handleLoginClick = () => {
     setCurrentScreen('login');
@@ -43,43 +21,23 @@ function App() {
   };
 
   const handleLoginSuccess = (userData: User) => {
-    setIsAuthenticated(true);
     setUser(userData);
-    
-    // Persist session data
-    localStorage.setItem('fluxia_authenticated', 'true');
-    localStorage.setItem('fluxia_user', JSON.stringify(userData));
-    localStorage.setItem('fluxia_login_time', Date.now().toString());
-    
     setCurrentScreen('app');
   };
 
   const handleLogout = () => {
-    setIsAuthenticated(false);
+    appController.logout();
     setUser(null);
-    
-    // Clear session data
-    localStorage.removeItem('fluxia_authenticated');
-    localStorage.removeItem('fluxia_user');
-    localStorage.removeItem('fluxia_login_time');
-    
     setCurrentScreen('home');
   };
 
   // Check session expiry (24 hours)
   React.useEffect(() => {
     const checkSessionExpiry = () => {
-      const loginTime = localStorage.getItem('fluxia_login_time');
-      if (loginTime) {
-        const twentyFourHours = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
-        const isExpired = Date.now() - parseInt(loginTime) > twentyFourHours;
-        
-        if (isExpired) {
-          console.log('Session expired, logging out user');
-          handleLogout();
-        }
-      }
+      if (appController.checkSessionExpiry()) {
+        handleLogout();
     };
+    }
 
     // Check immediately
     checkSessionExpiry();
@@ -95,15 +53,22 @@ function App() {
 
   if (currentScreen === 'login') {
     return (
-      <LoginScreen 
+      <LoginScreen
+        appController={appController}
         onBack={handleBackToHome} 
         onLoginSuccess={handleLoginSuccess}
       />
     );
   }
 
-  if (currentScreen === 'app' && isAuthenticated && user) {
-    return <MainApp user={user} onLogout={handleLogout} />;
+  if (['app', 'brify', 'adaptia', 'visuo', 'projects'].includes(currentScreen) && appController.isAuthenticated() && user) {
+    return (
+      <MainApp 
+        appController={appController}
+        onLogout={handleLogout} 
+        onScreenChange={setCurrentScreen}
+      />
+    );
   }
 
   // Fallback to home if something goes wrong

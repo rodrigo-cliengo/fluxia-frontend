@@ -1,69 +1,41 @@
 import React from 'react';
 import { ArrowLeft, Copy, CheckCircle, Loader2, AlertCircle } from 'lucide-react';
-
-interface Project {
-  projectName: string;
-  projectId: string;
-  projectDetails: {
-    companyInformation: string;
-  };
-}
+import { AppController } from '../controllers/AppController';
+import { VisuoData } from '../models/VisuoData';
 
 interface VisuoScreenProps {
+  appController: AppController;
   feature: string;
-  selectedProject: Project | undefined;
   onBack: () => void;
-  cachedData: { feature: string; data: any } | null;
-  onSaveCache: (data: any) => void;
-  onClearCache: () => void;
 }
 
-interface VisuoResponse {
-  image4: string;
-  VEO3: string;
-}
-
-const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, selectedProject, onBack, cachedData, onSaveCache, onClearCache }) => {
+export const VisuoScreen: React.FC<VisuoScreenProps> = ({ appController, feature, onBack }) => {
   const [copiedItem, setCopiedItem] = React.useState<string | null>(null);
-  const [processedData, setProcessedData] = React.useState<VisuoResponse | null>(
-    cachedData && cachedData.feature === feature ? cachedData.data : null
-  );
-  const [loading, setLoading] = React.useState(!cachedData || cachedData.feature !== feature);
+  const [visuoData, setVisuoData] = React.useState<VisuoData | null>(null);
+  const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
-    // If we have cached data for this feature, use it
-    if (cachedData && cachedData.feature === feature) {
-      setProcessedData(cachedData.data);
+    // Check for cached data first
+    const cachedData = appController.getVisuoCachedData(feature);
+    if (cachedData) {
+      setVisuoData(cachedData);
       setLoading(false);
       return;
     }
 
+    // If no cached data, fetch from API
     const fetchVisuoData = async () => {
       try {
         setLoading(true);
         setError(null);
         
-        const requestBody = {
-          feature,
-          project: selectedProject
-        };
-        
-        const response = await fetch(`https://workflow-platform.cliengo.com/webhook/fluxia/visuo`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Error ${response.status}: ${response.statusText}`);
+        const result = await appController.generatePrompts(feature);
+        if (result.success && result.data) {
+          setVisuoData(result.data);
+        } else {
+          setError(result.error || 'Error desconocido');
         }
-
-        const data: VisuoResponse = await response.json();
-        setProcessedData(data);
-        onSaveCache(data);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Error desconocido al procesar la solicitud');
         console.error('Error fetching Visuo data:', err);
@@ -73,7 +45,7 @@ const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, selectedProject, onB
     };
 
     fetchVisuoData();
-  }, [feature, selectedProject]);
+  }, [feature, appController]);
 
   const handleCopy = (text: string, itemName: string) => {
     navigator.clipboard.writeText(text);
@@ -81,52 +53,30 @@ const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, selectedProject, onB
     setTimeout(() => setCopiedItem(null), 2000);
   };
 
-  const handleRetry = () => {
-    setError(null);
-    setLoading(true);
-    const fetchVisuoData = async () => {
-      try {
-        const requestBody = {
-          feature,
-          project: selectedProject
-        };
-        
-        const response = await fetch(`https://workflow-platform.cliengo.com/webhook/fluxia/visuo`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!response.ok) {
-          throw new Error(`Error ${response.status}: ${response.statusText}`);
-        }
-
-        const data: VisuoResponse = await response.json();
-        setProcessedData(data);
-        onSaveCache(data);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Error desconocido al procesar la solicitud');
-        console.error('Error fetching Visuo data:', err);
-      } finally {
-        setLoading(false);
+  const handleRetry = async () => {
+    try {
+      setError(null);
+      setLoading(true);
+      
+      const result = await appController.generatePrompts(feature);
+      if (result.success && result.data) {
+        setVisuoData(result.data);
+      } else {
+        setError(result.error || 'Error desconocido');
       }
-    };
-
-    fetchVisuoData();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error desconocido al procesar la solicitud');
+      console.error('Error fetching Visuo data:', err);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleRefresh = () => {
-    onClearCache();
-    setProcessedData(null);
+    appController.clearVisuoCache();
+    setVisuoData(null);
     handleRetry();
   };
-
-  const promptTypes = [
-    { key: 'image4', name: 'Image4', description: 'Prompt optimizado para Image4', color: 'blue' },
-    { key: 'VEO3', name: 'VEO3', description: 'Prompt optimizado para VEO3', color: 'purple' },
-  ];
 
   const OutputCard: React.FC<{ title: string; description: string; content: string; itemKey: string; color: string }> = ({ title, description, content, itemKey, color }) => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
@@ -217,18 +167,17 @@ const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, selectedProject, onB
           )}
 
           {/* Success State - Show Results */}
-          {processedData && !loading && !error && (
+          {visuoData && !loading && !error && (
             <>
-              {/* Visual Prompts */}
               <div className="space-y-6">
                 <h2 className="text-xl font-bold text-gray-900">Prompts Visuales por Modelo</h2>
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {promptTypes.map((promptType) => (
+                  {visuoData.getPromptTypes().map((promptType) => (
                     <OutputCard
                       key={promptType.key}
                       title={promptType.name}
                       description={promptType.description}
-                      content={processedData[promptType.key as keyof VisuoResponse]}
+                      content={visuoData.getPrompt(promptType.key as keyof typeof visuoData.prompts)}
                       itemKey={promptType.key}
                       color={promptType.color}
                     />
@@ -236,7 +185,6 @@ const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, selectedProject, onB
                 </div>
               </div>
 
-              {/* Action Buttons */}
               <div className="flex justify-center space-x-4 pt-8">
                 <button 
                   onClick={handleRefresh}
@@ -261,5 +209,3 @@ const VisuoScreen: React.FC<VisuoScreenProps> = ({ feature, selectedProject, onB
     </div>
   );
 };
-
-export default VisuoScreen;
