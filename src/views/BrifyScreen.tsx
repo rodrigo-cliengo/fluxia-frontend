@@ -1,7 +1,7 @@
 import React from 'react';
-import { ArrowLeft, Copy, CheckCircle, Loader2, AlertCircle, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Copy, CheckCircle, Loader2, AlertCircle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { AppController } from '../controllers/AppController';
-import { BrifyData } from '../models/BrifyData';
+import { BrifyData, BrifyOptionData } from '../models/BrifyData';
 
 interface BrifyScreenProps {
   appController: AppController;
@@ -12,7 +12,8 @@ interface BrifyScreenProps {
 export const BrifyScreen: React.FC<BrifyScreenProps> = ({ appController, feature, onBack }) => {
   const [copiedItem, setCopiedItem] = React.useState<string | null>(null);
   const [brifyData, setBrifyData] = React.useState<BrifyData | null>(null);
-  const [selectedOptionIndex, setSelectedOptionIndex] = React.useState<number>(0);
+  const [currentOptionIndex, setCurrentOptionIndex] = React.useState<Record<string, number>>({});
+  const [selectedOptionIndex, setSelectedOptionIndex] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -34,6 +35,7 @@ export const BrifyScreen: React.FC<BrifyScreenProps> = ({ appController, feature
         const result = await appController.generateBrief(feature);
         if (result.success && result.data) {
           setBrifyData(result.data);
+          setCurrentOptionIndex({});
         } else {
           setError(result.error || 'Error desconocido');
         }
@@ -56,6 +58,7 @@ export const BrifyScreen: React.FC<BrifyScreenProps> = ({ appController, feature
       const result = await appController.generateBrief(feature);
       if (result.success && result.data) {
         setBrifyData(result.data);
+        setCurrentOptionIndex({});
       } else {
         setError(result.error || 'Error desconocido');
       }
@@ -70,7 +73,23 @@ export const BrifyScreen: React.FC<BrifyScreenProps> = ({ appController, feature
   const handleRefresh = () => {
     appController.clearBrifyCache();
     setBrifyData(null);
+    setCurrentOptionIndex({});
     handleRetry();
+  };
+
+  const navigateOption = (direction: 'prev' | 'next') => {
+    if (!brifyData) return;
+    
+    const totalOptions = brifyData.getTotalOptions();
+    let newIndex;
+    
+    if (direction === 'prev') {
+      newIndex = selectedOptionIndex > 0 ? selectedOptionIndex - 1 : totalOptions - 1;
+    } else {
+      newIndex = selectedOptionIndex < totalOptions - 1 ? selectedOptionIndex + 1 : 0;
+    }
+    
+    setSelectedOptionIndex(newIndex);
   };
 
   const handleCopy = (text: string, itemName: string) => {
@@ -79,10 +98,16 @@ export const BrifyScreen: React.FC<BrifyScreenProps> = ({ appController, feature
     setTimeout(() => setCopiedItem(null), 2000);
   };
 
-  const OutputCard: React.FC<{ title: string; content: string; itemKey: string }> = ({ title, content, itemKey }) => (
+  const OutputCard: React.FC<{ title: string; content: string; itemKey: string; icon?: React.ReactNode; description?: string; color?: string }> = ({ title, content, itemKey, icon, description }) => (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+        <div className="flex items-center space-x-3">
+          {icon}
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900">{title}</h3>
+            {description && <p className="text-sm text-gray-500">{description}</p>}
+          </div>
+        </div>
         <button
           onClick={() => handleCopy(content, itemKey)}
           className="flex items-center space-x-2 px-3 py-1.5 text-sm text-gray-600 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition-colors duration-200"
@@ -164,30 +189,43 @@ export const BrifyScreen: React.FC<BrifyScreenProps> = ({ appController, feature
           {/* Success State - Show Results */}
           {brifyData && !loading && !error && (
             <>
-              {/* Option Selection Dropdown */}
+              {/* Option Selection with Navigation */}
               <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
                 <div className="mb-4">
-                  <label htmlFor="option-select" className="block text-lg font-semibold text-gray-900 mb-2">
-                    Seleccionar Opción
-                  </label>
-                  <p className="text-gray-600 text-sm mb-4">
-                    Elige la opción que mejor se adapte a tus necesidades
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold text-gray-900">Opciones Generadas</h3>
+                    <div className="flex items-center space-x-4">
+                      <button
+                        onClick={() => navigateOption('prev')}
+                        className="flex items-center justify-center w-10 h-10 text-purple-400 hover:text-purple-600 hover:bg-purple-50 rounded-full transition-colors duration-200"
+                      >
+                        <ChevronLeft className="w-5 h-5" />
+                      </button>
+                      
+                      <div className="flex items-center space-x-2">
+                        {brifyData.options.map((_, index) => (
+                          <button
+                            key={index}
+                            onClick={() => setSelectedOptionIndex(index)}
+                            className={`w-3 h-3 rounded-full transition-colors duration-200 ${
+                              index === selectedOptionIndex ? 'bg-purple-500' : 'bg-gray-300 hover:bg-gray-400'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      
+                      <button
+                        onClick={() => navigateOption('next')}
+                        className="flex items-center justify-center w-10 h-10 text-purple-400 hover:text-purple-600 hover:bg-purple-50 rounded-full transition-colors duration-200"
+                      >
+                        <ChevronRight className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                  
+                  <p className="text-gray-600 text-sm">
+                    Opción {selectedOptionIndex + 1} de {brifyData.getTotalOptions()} - Navega entre las opciones generadas
                   </p>
-                </div>
-                <div className="relative">
-                  <select
-                    id="option-select"
-                    value={selectedOptionIndex}
-                    onChange={(e) => setSelectedOptionIndex(parseInt(e.target.value))}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent appearance-none bg-white text-gray-900"
-                  >
-                    {brifyData.options.map((option, index) => (
-                      <option key={index} value={index}>
-                        Opción {index + 1}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown className="absolute right-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />
                 </div>
               </div>
 
@@ -199,18 +237,24 @@ export const BrifyScreen: React.FC<BrifyScreenProps> = ({ appController, feature
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                       <OutputCard
                         title="Beneficio Funcional"
+                        description="Funcionalidad práctica del feature"
                         content={brifyData.getOption(selectedOptionIndex)!.funcional}
                         itemKey="funcional"
+                        icon={<div className="w-3 h-3 bg-blue-500 rounded-full"></div>}
                       />
                       <OutputCard
                         title="Beneficio Económico"
+                        description="Valor económico del feature"
                         content={brifyData.getOption(selectedOptionIndex)!.económico}
                         itemKey="economico"
+                        icon={<div className="w-3 h-3 bg-green-500 rounded-full"></div>}
                       />
                       <OutputCard
                         title="Beneficio Emocional"
+                        description="Impacto emocional del feature"
                         content={brifyData.getOption(selectedOptionIndex)!.emocional}
                         itemKey="emocional"
+                        icon={<div className="w-3 h-3 bg-pink-500 rounded-full"></div>}
                       />
                     </div>
                   </div>
@@ -221,13 +265,17 @@ export const BrifyScreen: React.FC<BrifyScreenProps> = ({ appController, feature
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                       <OutputCard
                         title="Mensaje Comercial"
+                        description="Mensaje principal de venta"
                         content={brifyData.getOption(selectedOptionIndex)!.mensaje_comercial}
                         itemKey="mensaje"
+                        icon={<div className="w-3 h-3 bg-orange-500 rounded-full"></div>}
                       />
                       <OutputCard
                         title="Call to Action"
+                        description="Llamada a la acción optimizada"
                         content={brifyData.getOption(selectedOptionIndex)!.CTA}
                         itemKey="cta"
+                        icon={<div className="w-3 h-3 bg-red-500 rounded-full"></div>}
                       />
                     </div>
                   </div>
@@ -238,8 +286,10 @@ export const BrifyScreen: React.FC<BrifyScreenProps> = ({ appController, feature
                     <div className="grid grid-cols-1 gap-6">
                       <OutputCard
                         title="Prompt Visual"
+                        description="Descripción visual para generar imágenes"
                         content={brifyData.getOption(selectedOptionIndex)!.visual}
                         itemKey="visual"
+                        icon={<div className="w-3 h-3 bg-purple-500 rounded-full"></div>}
                       />
                     </div>
                   </div>

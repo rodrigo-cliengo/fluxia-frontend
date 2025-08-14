@@ -1,6 +1,6 @@
 export interface VisuoPrompts {
-  image4: string;
-  VEO3: string;
+  image4: string[];
+  VEO3: string[];
 }
 
 export class VisuoData {
@@ -23,8 +23,18 @@ export class VisuoData {
     ];
   }
 
-  getPrompt(key: keyof VisuoPrompts): string {
+  getPrompt(key: keyof VisuoPrompts): string[] {
     return this.prompts[key];
+  }
+
+  getPromptOption(key: keyof VisuoPrompts, index: number): string {
+    return this.prompts[key][index] || '';
+  }
+
+  updatePromptOption(key: keyof VisuoPrompts, index: number, newValue: string): void {
+    if (this.prompts[key] && this.prompts[key][index] !== undefined) {
+      this.prompts[key][index] = newValue;
+    }
   }
 
   static fromApiResponse(data: any, feature: string, projectId: string): VisuoData {

@@ -68,6 +68,8 @@ export class AuthController {
     this.user = null;
     this.isAuthenticated = false;
     this.clearStorage();
+    console.log('🚪 User logged out, auth data cleared');
+    // Note: We don't clear module caches on logout to preserve work
   }
 
   public getUser(): User | null {

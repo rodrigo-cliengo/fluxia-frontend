@@ -91,9 +91,9 @@ export class AppController {
     this.brifyController.clearCache();
   }
 
-  public async generateAdaptations(videoScript: string, selectedMedia: string[]) {
+  public async generateAdaptations(videoScript: string, selectedMedia: string[], selectedBrifyData?: any, selectedVisuoData?: any) {
     const project = this.getSelectedProject();
-    return await this.adaptiaController.generateAdaptations(videoScript, selectedMedia, project);
+    return await this.adaptiaController.generateAdaptations(videoScript, selectedMedia, project, selectedBrifyData, selectedVisuoData);
   }
 
   public getAdaptiaCachedData(videoScript: string) {
@@ -104,9 +104,9 @@ export class AppController {
     this.adaptiaController.clearCache();
   }
 
-  public async generatePrompts(feature: string) {
+  public async generatePrompts(feature: string, selectedBrifyOptions?: any) {
     const project = this.getSelectedProject();
-    return await this.visuoController.generatePrompts(feature, project);
+    return await this.visuoController.generatePrompts(feature, project, selectedBrifyOptions);
   }
 
   public getVisuoCachedData(feature: string) {
@@ -115,6 +115,53 @@ export class AppController {
 
   public clearVisuoCache(): void {
     this.visuoController.clearCache();
+  }
+
+  // Cache update methods for preserving edits
+  public updateBrifyCache(data: any): void {
+    this.brifyController.updateCachedData(data);
+  }
+
+  public updateVisuoCache(data: any): void {
+    this.visuoController.updateCachedData(data);
+  }
+
+  public updateAdaptiaCache(data: any): void {
+    this.adaptiaController.updateCachedData(data);
+  }
+
+  // Export data method
+  public async exportData(payload: any): Promise<{ success: boolean; error?: string }> {
+    try {
+      console.log('🚀 Guardando datos en:', 'https://workflow-platform.cliengo.com/webhook/fluxia/save-data');
+      console.log('📤 Payload de guardado:', payload);
+
+      const response = await fetch('https://workflow-platform.cliengo.com/webhook/fluxia/save-data', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ API Response not OK:', response.status, response.statusText, errorText);
+        throw new Error(`Error ${response.status}: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log('✅ Datos guardados exitosamente:', result);
+      
+      return { success: true };
+
+    } catch (err) {
+      console.error('❌ Error guardando datos:', err);
+      return { 
+        success: false, 
+        error: err instanceof Error ? err.message : 'Error desconocido al guardar datos' 
+      };
+    }
   }
 
   // Utility methods

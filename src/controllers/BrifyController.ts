@@ -21,6 +21,9 @@ export class BrifyController {
     project: ProjectData | undefined
   ): Promise<{ success: boolean; data?: BrifyData; error?: string }> {
     try {
+      console.log('🚀 Making API call to:', 'https://workflow-platform.cliengo.com/webhook/fluxia/brify');
+      console.log('📤 Request body:', { feature, project });
+      
       const requestBody = {
         feature,
         project
@@ -35,10 +38,12 @@ export class BrifyController {
       });
 
       if (!response.ok) {
+        console.error('❌ API Response not OK:', response.status, response.statusText);
         throw new Error(`Error ${response.status}: ${response.statusText}`);
       }
 
       const apiData = await response.json();
+      console.log('✅ API Response data:', apiData);
       const brifyData = BrifyData.fromApiResponse(apiData, feature, project?.projectId || '');
       
       this.cachedData = brifyData;
@@ -66,9 +71,19 @@ export class BrifyController {
     localStorage.removeItem('fluxia_brify_cache');
   }
 
+  public updateCachedData(data: BrifyData): void {
+    this.cachedData = data;
+    this.saveToCache();
+  }
+
   private saveToCache(): void {
     if (this.cachedData) {
-      localStorage.setItem('fluxia_brify_cache', JSON.stringify(this.cachedData.toJSON()));
+      try {
+        localStorage.setItem('fluxia_brify_cache', JSON.stringify(this.cachedData.toJSON()));
+        console.log('✅ Brify cache saved successfully');
+      } catch (error) {
+        console.error('❌ Error saving brify cache:', error);
+      }
     }
   }
 
@@ -78,9 +93,10 @@ export class BrifyController {
       try {
         const data = JSON.parse(cached);
         this.cachedData = new BrifyData(data.options, data.feature, data.projectId);
+        console.log('✅ Brify cache loaded successfully');
       } catch (error) {
-        console.error('Error loading brify cache:', error);
-        localStorage.removeItem('fluxia_brify_cache');
+        console.error('❌ Error loading brify cache, keeping cache:', error);
+        // Don't clear cache on parse error, just log it
       }
     }
   }

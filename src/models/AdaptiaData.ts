@@ -90,6 +90,13 @@ export class AdaptiaData {
     }).filter(item => item.content.length > 0);
   }
 
+  updateContentOption(mediaKey: string, optionIndex: number, field: string, newValue: string): void {
+    const content = this.content[mediaKey as keyof AdaptiaContent];
+    if (content && content[optionIndex] && (content[optionIndex] as any)[field] !== undefined) {
+      (content[optionIndex] as any)[field] = newValue;
+    }
+  }
+
   static fromApiResponse(data: any, videoScript: string, selectedMedia: string[], projectId: string): AdaptiaData {
     return new AdaptiaData(data.content, videoScript, selectedMedia, projectId);
   }

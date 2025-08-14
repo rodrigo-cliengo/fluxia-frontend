@@ -18,12 +18,17 @@ export class VisuoController {
 
   public async generatePrompts(
     feature: string, 
-    project: ProjectData | undefined
+    project: ProjectData | undefined,
+    selectedBrifyOptions?: any
   ): Promise<{ success: boolean; data?: VisuoData; error?: string }> {
     try {
+      console.log('🚀 Making API call to:', 'https://workflow-platform.cliengo.com/webhook-test/fluxia/visuo');
+      console.log('📤 Request body:', { feature, project, selectedBrifyOptions });
+      
       const requestBody = {
         feature,
-        project
+        project,
+        ...(selectedBrifyOptions && { selectedBrifyOptions })
       };
       
       const response = await fetch(`https://workflow-platform.cliengo.com/webhook/fluxia/visuo`, {
@@ -35,10 +40,12 @@ export class VisuoController {
       });
 
       if (!response.ok) {
+        console.error('❌ API Response not OK:', response.status, response.statusText);
         throw new Error(`Error ${response.status}: ${response.statusText}`);
       }
 
       const apiData = await response.json();
+      console.log('✅ API Response data:', apiData);
       const visualData = VisuoData.fromApiResponse(apiData, feature, project?.projectId || '');
       
       this.cachedData = visualData;
@@ -66,9 +73,19 @@ export class VisuoController {
     localStorage.removeItem('fluxia_visuo_cache');
   }
 
+  public updateCachedData(data: VisuoData): void {
+    this.cachedData = data;
+    this.saveToCache();
+  }
+
   private saveToCache(): void {
     if (this.cachedData) {
-      localStorage.setItem('fluxia_visuo_cache', JSON.stringify(this.cachedData.toJSON()));
+      try {
+        localStorage.setItem('fluxia_visuo_cache', JSON.stringify(this.cachedData.toJSON()));
+        console.log('✅ Visuo cache saved successfully');
+      } catch (error) {
+        console.error('❌ Error saving visuo cache:', error);
+      }
     }
   }
 
@@ -78,9 +95,10 @@ export class VisuoController {
       try {
         const data = JSON.parse(cached);
         this.cachedData = new VisuoData(data.prompts, data.feature, data.projectId);
+        console.log('✅ Visuo cache loaded successfully');
       } catch (error) {
-        console.error('Error loading visuo cache:', error);
-        localStorage.removeItem('fluxia_visuo_cache');
+        console.error('❌ Error loading visuo cache, keeping cache:', error);
+        // Don't clear cache on parse error, just log it
       }
     }
   }

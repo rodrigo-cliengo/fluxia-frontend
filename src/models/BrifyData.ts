@@ -29,6 +29,12 @@ export class BrifyData {
     return this.options.length;
   }
 
+  updateOptionField(optionIndex: number, field: keyof BrifyOptionData, newValue: string): void {
+    if (this.options[optionIndex] && this.options[optionIndex][field] !== undefined) {
+      this.options[optionIndex][field] = newValue;
+    }
+  }
+
   static fromApiResponse(data: any, feature: string, projectId: string): BrifyData {
     return new BrifyData(data.options, feature, projectId);
   }

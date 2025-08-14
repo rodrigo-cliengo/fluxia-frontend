@@ -19,7 +19,9 @@ export class AdaptiaController {
   public async generateAdaptations(
     videoScript: string,
     selectedMedia: string[],
-    project: ProjectData | undefined
+    project: ProjectData | undefined,
+    selectedBrifyData?: any,
+    selectedVisuoData?: any
   ): Promise<{ success: boolean; data?: AdaptiaData; error?: string }> {
     if (selectedMedia.length === 0) {
       return { success: false, error: 'Por favor selecciona al menos un medio para adaptar' };
@@ -30,6 +32,9 @@ export class AdaptiaController {
     }
 
     try {
+      console.log('🚀 Making API call to:', 'https://workflow-platform.cliengo.com/webhook/fluxia/adaptia');
+      console.log('📤 Request body:', { videoScript, project, selectedMedia });
+      
       const response = await fetch(`https://workflow-platform.cliengo.com/webhook/fluxia/adaptia`, {
         method: 'POST',
         headers: {
@@ -38,15 +43,19 @@ export class AdaptiaController {
         body: JSON.stringify({ 
           videoScript,
           project,
-          selectedMedia
+          selectedMedia,
+          ...(selectedBrifyData && { selectedBrifyData }),
+          ...(selectedVisuoData && { selectedVisuoData })
         }),
       });
 
       if (!response.ok) {
+        console.error('❌ API Response not OK:', response.status, response.statusText);
         throw new Error(`Error ${response.status}: ${response.statusText}`);
       }
 
       const apiData = await response.json();
+      console.log('✅ API Response data:', apiData);
       const adaptiaData = AdaptiaData.fromApiResponse(apiData, videoScript, selectedMedia, project?.projectId || '');
       
       this.cachedData = adaptiaData;
@@ -74,9 +83,19 @@ export class AdaptiaController {
     localStorage.removeItem('fluxia_adaptia_cache');
   }
 
+  public updateCachedData(data: AdaptiaData): void {
+    this.cachedData = data;
+    this.saveToCache();
+  }
+
   private saveToCache(): void {
     if (this.cachedData) {
-      localStorage.setItem('fluxia_adaptia_cache', JSON.stringify(this.cachedData.toJSON()));
+      try {
+        localStorage.setItem('fluxia_adaptia_cache', JSON.stringify(this.cachedData.toJSON()));
+        console.log('✅ Adaptia cache saved successfully');
+      } catch (error) {
+        console.error('❌ Error saving adaptia cache:', error);
+      }
     }
   }
 
@@ -86,9 +105,10 @@ export class AdaptiaController {
       try {
         const data = JSON.parse(cached);
         this.cachedData = new AdaptiaData(data.content, data.videoScript, data.selectedMedia, data.projectId);
+        console.log('✅ Adaptia cache loaded successfully');
       } catch (error) {
-        console.error('Error loading adaptia cache:', error);
-        localStorage.removeItem('fluxia_adaptia_cache');
+        console.error('❌ Error loading adaptia cache, keeping cache:', error);
+        // Don't clear cache on parse error, just log it
       }
     }
   }

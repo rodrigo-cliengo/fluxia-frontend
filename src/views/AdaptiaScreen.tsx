@@ -263,10 +263,10 @@ export const AdaptiaScreen: React.FC<AdaptiaScreenProps> = ({ appController, fea
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="mb-4">
               <label htmlFor="video-script" className="block text-lg font-semibold text-gray-900 mb-2">
-                Guión de Video
+                Idea original
               </label>
               <p className="text-gray-600 text-sm mb-4">
-                Ingresa el guión de video que deseas adaptar para diferentes redes sociales
+                Ingresa la idea original que deseas adaptar para diferentes redes sociales
               </p>
             </div>
             <textarea
